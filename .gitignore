@@ -11,4 +11,6 @@ turb2d.egg-info/
 
 turb2d/__pycache__/
 
-*.yml
+nrun*
+
+turb/
