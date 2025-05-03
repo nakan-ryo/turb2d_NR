@@ -16,107 +16,51 @@ Step 1. Execute the following command in the downloaded turb2d directory (the di
 
 You may be requested to install pip before the installation of turb2d. Note that the package management system of conda may be collapsed by pip.
 
-Step 2. If the installation of turb2d is successful, you can run run_turb2d_script.py to try out the calculations. 
+Step 2. If the installation of turb2d is successful, you can run run_turb2d_script.py to try out the calculations.
 
 > python run_turb2d_script.py
 
 Calculation results will be output to tc*.nc files in the NetCDF format, which can be read by visualization software such as Paraview.
+
 ---------------
-Usage
+# Revision by Ryo Nakanishi 2025.03.01
+@ turb2d.py utilis.py sediment_func.py run_turb2d_script.py pyproject.toml
 
-A simple usage of this program is as follows:
+## Change of initial ratio distribution of active layers and specification of initial flow area by tiff file
+*distribution_filename* specifies the ratio of active layer for each grain size *setting_gs*. See *GB_sand01.tif* for use of tiff file.
+Note that outside the specified range of tiff file, the last grain size scale element in the Ds array is 1.0 (assuming finest size).
 
-Example 01: Surge-like turbidity current in an artificial submarine canyon
----------
-from turb2d import create_topography,
-from turb2d import create_init_flow_region,
-from turb2d import TurbidityCurrent2D
-from landlab.io.native_landlab import save_grid
+To specify the initial flow range and height by means of a tiff file, specify the file path in *ini_type*.
+The *height_factor* can be used to change the magnification factor of the tiff values.
 
-# First, make a Landlab grid with artificial topography
-grid = create_topography(
-    length=5000,
-    width=2000,
-    spacing=10,
-    slope_outside=0.2,
-    slope_inside=0.05,
-    slope_basin_break=2000,
-    canyon_basin_break=2200,
-    canyon_center=1000,
-    canyon_half_width=100,
-)
+All tiff files, including topographic data, must have the same x and y (longitude and latitude) spacing at meter scale.
+Enter the mesh size in WGS84 into *grid_degree*.
 
-# Next, add the initial flow region on the topography
-create_init_flow_region(
-    grid,
-    initial_flow_concentration=0.01,
-    initial_flow_thickness=100,
-    initial_region_radius=100,
-    initial_region_center=[1000, 4000],
-)
+## The initial shape of the turbidity flow can be selected.
+In addition to the conventional cylindrical collapse, rectangular collapse and boundary inlet can be selected.
+> ini_type = "circle" or "rectangle" or "inlet"
 
-# Create an instance of TurbidityCurrent2D
-tc = TurbidityCurrent2D(grid,
-                        Cf=0.004,
-                        alpha=0.1,
-                        Ds=80 * 10**-6, # single grain size case
-                        # For mixed grain size case
-			            # Ds = [250e-6, 125e-6, 63e-6, 32e-6],
-                        )
+Initial flow velocity and azimuth can be set.
+Note that there may be exceptions or mistakes in the azimuth setting.
 
-# Save the initial condition to a NetCDF file which can be read by
-# paraview
-tc.save_nc('tc{:04d}.nc'.format(0))
+The **inlet** is set by a simple boundary condition based on latitude and longitude or the depth of the seafloor(*inlet_depth*).
+Only the y-direction (latitude) is implemented. *inlet_lat* is used to select the range of initial flow conditions, and *inlet_width* is used to set the number of grids.
+There are two methods to give initial conditions: one is to give a constant concentration and velocity over a certain duration (*constant_c* and *constant_v*), and the other is to give a csv file discrived time series variation such as *C0.csv* or *velocity.csv* formats.
+Time series variation requres two flags (*C_time_series_flag* and *V_time_series_flag*), and gives different conditions by specifying a folder *input_dir*.
+Note that this method has not been fully tested.
 
-# Start Calculation for 10 seconds
-for i in range(10):
-    tc.run_one_step(dt=1.0)
-    tc.save_nc('tc{:04d}.nc'.format(i + 1))
-    print("", end="\r")
-    print("{:.1f}% finished".format(i / last * 100), end='\r')
+## Added the ability to save time-series data in csv at points set in the coordinate system.
+Specify a csv file with the coordinates you wish to record in obs_csv.
+For the format of the csv file, refer to the file in the obs_csv folder.
 
-# Save the result
-save_grid(grid, 'tc{:04d}.nc'.format(i))
+## Several sediment entrainment formulas were implemented.
+Traer et al. 2012 and NRv2 (my experimental)
+Calculate D50 and sorting from the active layers
+Camax, p, df, ef can be configured in config.yml.
 
+## Output maximum erosion depth as nc file
+By considering the maximum erosion thickness, the final turbidite layer thickness can now be calculated.
 
-Example 02: Use natural topography loaded from the GEOTIFF format file
-----------------
-from turb2d import create_topography_from_geotiff
-from turb2d import create_init_flow_region
-from turb2d import TurbidityCurrent2D
-from landlab.io.native_landlab import save_grid
-
-grid = create_topography_from_geotiff('depth500.tif')
-
-create_init_flow_region(
-    grid,
-    initial_flow_concentration=0.01,
-    initial_flow_thickness=500,
-    initial_region_radius=30000,
-    initial_region_center=[200000, 125000],
-)
-
-# making turbidity current object
-tc = TurbidityCurrent2D(grid,
-                        Cf=0.004,
-                        alpha=0.1,
-                        Ds=80 * 10**-6, # Single grain size
-			# Ds = [250e-6, 125e-6, 63e-6, 32e-6], # Multiple grain size
-                        )
-
-tc.save_nc('tc{:04d}.nc'.format(0))
-
-for i in range(10):
-    tc.run_one_step(dt=1.0)
-    tc.save_nc('tc{:04d}.nc'.format(i+1))
-    print("", end="\r")
-    print("{:.1f}% finished".format(i / last * 100), end='\r')
-save_grid(grid, 'tc{:04d}.nc'.format(i))
-
-
--------------------------
-Visualization
-
-Use the visualization software to visualize the calculation results. Paraview can be used for this purpose.
-
-
+## Visualization support option **turb2d_nc.py**
+Optionally, a script (running separately from turb2d) is provided to calculate and chart the turbidite layer thickness (or erosion depth) for each grain size class.
+This script can be overridden by the observed layer thickness added *obs_csv* to facilitate comparisons or to create a YY plot of calculated vs. observed thicknesses.
