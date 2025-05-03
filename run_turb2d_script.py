@@ -32,11 +32,11 @@ grid = create_topography_from_geotiff(os.path.join(root_path,"bathymetry/GB04_WG
 #-------------------------------------------------------------------------------------------
 
 #----------------------BASE SETTING-----------------------------------------------------------
-path = "/mnt/d/turb2d" #"/mnt/f/Turb2d/Test"
+path = "/mnt/c/turb2d" #"/mnt/f/Turb2d/Test"
 obs_csv = 'obs_csv/obs_list.csv'
-dirname = 'test01'#'YC086'#'GB222' #"test2024-04" #
+dirname = 'GB259'#'YC086'#'GB222' #"test2024-04" #
 last = 3*24*60*60 #8640 #100000
-itsnap = 1200
+itsnap = 20*60
 random_sw = False #True #
 ini_type = "bathymetry/GB_vfill_2.tif" #"rectangle" #"circle" #"inlet" #
 Ds = [1.8e-4, 6.4e-5, 3.0e-5]
@@ -48,7 +48,7 @@ height_factor = 0.1 #flow depth provided from tif * height_factor
 #---------------------Rectangle or Circle TYPE----------------------
 #BOTH
 initial_cordiate = [44.5419, -55.9347] #lat, lon
-initial_flow_concentration=[0.00, 0.03, 0.03] #0.01, #[0.01,0.01], #[0.001,0.001,0.001],
+initial_flow_concentration=[0.00, 0.02, 0.04] #0.01, #[0.01,0.01], #[0.001,0.001,0.001],
 initial_flow_thickness = 20           #[m]
 velocity = 50 #m/s
 
