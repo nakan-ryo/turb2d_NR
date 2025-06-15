@@ -34,7 +34,7 @@ grid = create_topography_from_geotiff(os.path.join(root_path,"bathymetry/GB04_WG
 #----------------------BASE SETTING-----------------------------------------------------------
 path = "/mnt/c/turb2d" #"/mnt/f/Turb2d/Test"
 obs_csv = 'obs_csv/obs_list.csv'
-dirname = 'GB259'#'YC086'#'GB222' #"test2024-04" #
+dirname = 'GB323'#'YC086'#'GB222' #"test2024-04" #
 last = 3*24*60*60 #8640 #100000
 itsnap = 20*60
 random_sw = False #True #

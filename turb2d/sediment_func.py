@@ -165,10 +165,11 @@ def get_es(R, g, Ds, nu, u_star, Fr, bed_active_layer, p_coef, camax, function="
     if function == "NRv1":
         _NRv1(R, g, Ds, nu, u_star, p=p_coef, beta=3.0, out=out)
     if function == "NRv2":
-        _NRv2(R, g, Ds, nu, u_star, bed_active_layer, p=p_coef, beta=2.8, camax=camax, out=out)
+        _NRv2(R, g, Ds, nu, u_star, bed_active_layer, p=p_coef, beta=5.0, camax=camax, out=out)
     if function == "NRv3":
         _NRv3(R, g, Ds, nu, u_star, p=p_coef, beta=3.0, camax=camax, out=out)
-
+    if function == "NRv4":
+        _NRv2(R, g, Ds, nu, u_star, bed_active_layer, p=p_coef, beta=1.5, camax=camax, out=out)
     return out
 
 def _NRv1(R, g, Ds, nu, u_star, p, beta=3.0, out=None):
@@ -232,16 +233,17 @@ def _NRv2(R, g, Ds, nu, u_star, bed_active_layer, p, beta=2.8, camax=0.3, out=No
     Ds_phi = -np.log2(Ds*1000)
     sigma = np.sqrt(np.sum(bed_active_layer * (Ds_phi - D50_phi) ** 2, axis=0)) #1.0
     kshi = 1 -0.288 * sigma
-    a = 1.3 * 10**-7 #7*10**-6 #
+    # a = 1.3 * 10**-7 #7*10**-6 #
+    a = 7.7e-05
 
     # coefficients for calculation
-    alpha_1=1
-    alpha_2=0.678 #0.6 #
+    alpha_1 = 1
+    alpha_2 = 0.6 #0.678 #
 
     # calculate entrainment rate
-    Z = kshi * alpha_1 * sus_index * Rp ** alpha_2
-    # Z = alpha_1 * sus_index * Rp ** alpha_2
-    out[:, :] = p * a * Z ** beta / (1 + (a / camax) * Z ** beta) * (Ds/D50)**0.2
+    # Z = alpha_1 * sus_index * Rp ** alpha_2 * kshi
+    Z = alpha_1 * sus_index * Rp ** alpha_2
+    out[:, :] = p * a * Z ** beta / (1 + (a / camax) * Z ** beta) #* (Ds/D50)**0.2
 
     return out
 

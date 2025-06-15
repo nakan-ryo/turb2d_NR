@@ -2616,11 +2616,12 @@ class TurbidityCurrent2D(Component):
                                 str(i)][node_index] for i in range(self.number_gclass)], \
                 [self.grid.at_node["bed__sediment_volume_per_unit_area_" +
                                 str(i)][node_index] for i in range(self.number_gclass)], \
+                [self.es[i, node_index] for i in range(self.number_gclass)], \
                 ]
 
         headers = [
             "velocity", "depth", "ew", #"Cf",
-            "sediment_concentration", "sediment_volume"
+            "sediment_concentration", "sediment_volume", "es"
         ]
 
         with open(filename, 'a') as f:

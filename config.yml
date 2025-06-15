@@ -1,7 +1,7 @@
 flow:
   h_init: 0.0
-  Ch_w: 10.0e-4 #1.0e-7 #
-  h_w: 0.01
+  Ch_w: 10.0e-3 #1.0e-7 #
+  h_w: 1 #0.01
   alpha: 0.4 #Courant
   Cf: 0.003
   g: 9.81
@@ -19,12 +19,12 @@ flow:
   water_entrainment: True
   ewc: 1 #def=1
   water_detrainment: True
-  det_factor: 3 #3.05
+  det_factor: 2 #3.05
   suspension: True
   bedload_transport: False
-  sed_entrainment_func: NRv2 #Traer2012 #NRv1 # #GP1991field #GP1991exp #wright_and_parker(2004) #Leeuw2020P2 #
+  sed_entrainment_func: NRv4 #Traer2012 #NRv1 # #GP1991field #GP1991exp #wright_and_parker(2004) #Leeuw2020P2 #
   p_coef: 1
-  camax: 0.2 #def=0.3
+  camax: 0.03 #def=0.3
   no_erosion: False #True #
   no_erosion_Ds: [] #[0,1]
   dt_local_limit: 5.0
