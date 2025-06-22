@@ -7,7 +7,7 @@ from .utils import (
     create_topography,
     create_topography_from_geotiff,
 )
-from .wetdry import find_wet_grids, process_partial_wet_grids
+from .wetdry import find_wet_grids, process_partial_wet_grids, process_partial_wet_grids_wdf
 from .sediment_func import get_es, get_ew, get_ws, get_det_rate, get_bedload
 from .cip import update_gradient, update_gradient2
 from .cip import CIP2D, Jameson, SOR
@@ -991,6 +991,7 @@ class TurbidityCurrent2D(Component):
             out_dfdx=self.dudx_temp,
             out_dfdy=self.dudy_temp,
         )
+        self.u_temp[self.wet_pwet_horizontal_links] *= self.phi_link[self.wet_pwet_horizontal_links]
 
         self.cip2d.run(
             self.v,
@@ -1007,6 +1008,7 @@ class TurbidityCurrent2D(Component):
             out_dfdx=self.dvdx_temp,
             out_dfdy=self.dvdy_temp,
         )
+        self.v_temp[self.wet_pwet_vertical_links] *= self.phi_link[self.wet_pwet_vertical_links]
 
         self.cip2d.run(
             self.h,
@@ -1275,6 +1277,8 @@ class TurbidityCurrent2D(Component):
             * self.dt_local
             / self.h_link[self.wet_horizontal_links]
         )
+        self.u_temp[self.wet_horizontal_links] *= self.phi_link[self.wet_horizontal_links]
+
         self.v_temp[self.wet_vertical_links] /= (
             1
             + (
@@ -1294,6 +1298,7 @@ class TurbidityCurrent2D(Component):
             u_node=self.u_node_temp,
             v_node=self.v_node_temp,
         )
+        self.v_temp[self.wet_vertical_links] *= self.phi_link[self.wet_vertical_links]
 
     def _fluid_mass_conservation(self):
         """solve fluid mass conservation
@@ -1407,6 +1412,8 @@ class TurbidityCurrent2D(Component):
             )
             / dx2
         )
+        self.u_temp[wet_pwet_h_links] *= self.phi_link[wet_pwet_h_links]
+
         self.v_temp[wet_pwet_v_links] += (
             self.nu_t[wet_pwet_v_links]
             * dt
@@ -1430,6 +1437,7 @@ class TurbidityCurrent2D(Component):
             u_node=self.u_node_temp,
             v_node=self.v_node_temp,
         )
+        self.v_temp[wet_pwet_v_links] *= self.phi_link[wet_pwet_v_links]
 
         # map values
         map_links_to_nodes(
@@ -1854,6 +1862,7 @@ class TurbidityCurrent2D(Component):
         """Calculate processes at wet and dry boundary
         """
         process_partial_wet_grids(
+        # process_partial_wet_grids_wdf(
             self,
             self.h,
             self.u,

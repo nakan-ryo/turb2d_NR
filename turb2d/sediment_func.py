@@ -243,6 +243,7 @@ def _NRv2(R, g, Ds, nu, u_star, bed_active_layer, p, beta=2.8, camax=0.3, out=No
     # calculate entrainment rate
     # Z = alpha_1 * sus_index * Rp ** alpha_2 * kshi
     Z = alpha_1 * sus_index * Rp ** alpha_2
+    Z[Z <= 5] = 0
     out[:, :] = p * a * Z ** beta / (1 + (a / camax) * Z ** beta) #* (Ds/D50)**0.2
 
     return out

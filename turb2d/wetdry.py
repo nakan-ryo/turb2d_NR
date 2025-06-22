@@ -110,7 +110,20 @@ def find_wet_grids(tc):
     # tc.wet_vertical_links = vert_links[np.where(
     #     (p[north_nodes_at_link] > p_w) & (p[south_nodes_at_link] > p_w))]
 
-    wet_nodes = (Ch > Ch_w) & (tc.h > h_w)
+    #20250621 ADD#
+    Ch_w_min = 0.00001
+    Ch_w_alpha= Ch_w_min/100
+    Ch_w_smooth=0.1
+    Ch_w_local = np.maximum(Ch_w_min, Ch_w_alpha * tc.h)
+    xi  = (Ch - Ch_w_local) / (Ch_w_smooth * Ch_w_local)
+    phi = 0.5 * (1.0 + np.tanh(xi))          # 0–1 の連続マスク
+    wet_nodes = (phi > 0.05) & (tc.h > tc.h_w)   # 計算セル
+    tail = tc.grid.node_at_link_tail
+    head = tc.grid.node_at_link_head
+    tc.phi_link = 0.5 * (phi[tail] + phi[head])
+    #20250621 ADD#
+
+    # wet_nodes = (Ch > Ch_w) & (tc.h > h_w)
     tc.wet_nodes = core[wet_nodes[core]]
     tc.wet_horizontal_links = horiz_links[
         (wet_nodes[west_nodes_at_link[horiz_links]])
@@ -319,5 +332,85 @@ def process_partial_wet_grids(
      + v[partial_wet_vertical_links]
     v_out[partial_wet_vertical_links] *= 1 / (1 + CfvU * dt)
     v_out[dry_links] = 0
+
+    return h_out, u_out, v_out, Ch_out
+
+def process_partial_wet_grids_wdf(
+    tc,
+    h,
+    u,
+    v,
+    Ch,
+    h_out=None,
+    u_out=None,
+    v_out=None,
+    Ch_out=None,
+):
+    """Wetting/Drying Front Reconstruction (Bollermann et al., 2014) with
+    draining limiter, and depth + gradual sediment update at partial‑wet nodes.
+    """
+    if h_out is None: h_out = h.copy()
+    if u_out is None: u_out = u.copy()
+    if v_out is None: v_out = v.copy()
+    if Ch_out is None: Ch_out = Ch.copy()
+
+    g, R, Cf, dt, gamma, eta = (tc.g, tc.R, tc.Cf, tc.dt_local, tc.gamma, tc.eta)
+
+    links_h  = tc.partial_wet_horizontal_links
+    links_v  = tc.partial_wet_vertical_links
+    core_h   = tc.horizontally_partial_wet_nodes
+    core_v   = tc.vertically_partial_wet_nodes
+    wet_h    = tc.horizontally_wettest_nodes
+    wet_v    = tc.vertically_wettest_nodes
+    dir_h    = tc.horizontal_direction_wettest
+    dir_v    = tc.vertical_direction_wettest
+    dry_lnk  = tc.dry_links
+
+    # ------------------------------------------------------------------
+    # 1. Linear free‑surface reconstruction
+    # ------------------------------------------------------------------
+    eta_wet_h  = h[wet_h]  + eta[wet_h]
+    eta_part_h = h[core_h] + eta[core_h]
+    eta_iface_h = 0.5*(eta_wet_h + eta_part_h)
+    hL_h = np.maximum(0.0, eta_iface_h - eta[wet_h])
+    hR_h = np.maximum(0.0, eta_iface_h - eta[core_h])
+
+    eta_wet_v  = h[wet_v]  + eta[wet_v]
+    eta_part_v = h[core_v] + eta[core_v]
+    eta_iface_v = 0.5*(eta_wet_v + eta_part_v)
+    hL_v = np.maximum(0.0, eta_iface_v - eta[wet_v])
+    hR_v = np.maximum(0.0, eta_iface_v - eta[core_v])
+
+    # Depth update
+    h_out[core_h] = hR_h
+    h_out[core_v] = hR_v
+
+    # Gradual sediment transfer
+    ratio_h = np.clip(hR_h / (hL_h + 1e-8), 0.0, 1.0)
+    ratio_v = np.clip(hR_v / (hL_v + 1e-8), 0.0, 1.0)
+    Ch_out[core_h] = ratio_h * Ch[wet_h]
+    Ch_out[core_v] = ratio_v * Ch[wet_v]
+
+    draining_h = eta_wet_h > eta_part_h
+    draining_v = eta_wet_v > eta_part_v
+
+    # ------------------------------------------------------------------
+    # 2. Overspill velocities
+    # ------------------------------------------------------------------
+    vel_h = gamma * np.sqrt(2*R*g * hL_h * Ch[wet_h] / (hL_h + 1e-12))
+    vel_v = gamma * np.sqrt(2*R*g * hL_v * Ch[wet_v] / (hL_v + 1e-12))
+    vel_h[draining_h] *= 0.5
+    vel_v[draining_v] *= 0.5
+
+    # ------------------------------------------------------------------
+    # 3. Friction & velocity update
+    # ------------------------------------------------------------------
+    Cfh = Cf * np.hypot(u[links_h], v[links_h]) / (hL_h + hR_h + 1e-8)
+    Cfv = Cf * np.hypot(u[links_v], v[links_v]) / (hL_v + hR_v + 1e-8)
+
+    u_out[links_h] = (dir_h * vel_h + u[links_h]) / (1.0 + 2*Cfh*dt)
+    v_out[links_v] = (dir_v * vel_v + v[links_v]) / (1.0 + 2*Cfv*dt)
+    u_out[dry_lnk] = 0.0
+    v_out[dry_lnk] = 0.0
 
     return h_out, u_out, v_out, Ch_out
