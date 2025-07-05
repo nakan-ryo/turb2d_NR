@@ -111,7 +111,7 @@ def find_wet_grids(tc):
     #     (p[north_nodes_at_link] > p_w) & (p[south_nodes_at_link] > p_w))]
 
     #20250621 ADD#
-    Ch_w_min = 0.00001
+    Ch_w_min = Ch_w #0.00001
     Ch_w_alpha= Ch_w_min/100
     Ch_w_smooth=0.1
     Ch_w_local = np.maximum(Ch_w_min, Ch_w_alpha * tc.h)
@@ -124,6 +124,7 @@ def find_wet_grids(tc):
     #20250621 ADD#
 
     # wet_nodes = (Ch > Ch_w) & (tc.h > h_w)
+
     tc.wet_nodes = core[wet_nodes[core]]
     tc.wet_horizontal_links = horiz_links[
         (wet_nodes[west_nodes_at_link[horiz_links]])

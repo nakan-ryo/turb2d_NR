@@ -1684,6 +1684,24 @@ class TurbidityCurrent2D(Component):
         #     * self.U_temp[self.wet_pwet_links] ** 3
         #     - beta * K ** 1.5
 
+        # self.Kh_temp[self.wet_pwet_links] += self.dt_local * (
+        #     (self.Cf + 0.5 * self.ew_link[self.wet_pwet_links])
+        #     * self.U_temp[self.wet_pwet_links]
+        #     * self.U_temp[self.wet_pwet_links]
+        #     * self.U_temp[self.wet_pwet_links]
+        #     - beta
+        #     * (self.Kh[self.wet_pwet_links] / self.h_link[self.wet_pwet_links]) ** 1.5
+        #     - self.R
+        #     * self.g
+        #     * (
+        #         np.sum(self.Ch_link_i_temp[:, self.wet_pwet_links] * self.ws, axis=0)
+        #         + 0.5
+        #         * self.U_temp[self.wet_pwet_links]
+        #         * self.ew_link[self.wet_pwet_links]
+        #         * self.Ch_link_temp[self.wet_pwet_links]
+        #     )
+        # )
+
         self.Kh_temp[self.wet_pwet_links] += self.dt_local * (
             (self.Cf + 0.5 * self.ew_link[self.wet_pwet_links])
             * self.U_temp[self.wet_pwet_links]
