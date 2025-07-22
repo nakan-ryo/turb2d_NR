@@ -113,14 +113,15 @@ def find_wet_grids(tc):
     #20250621 ADD#
     Ch_w_min = Ch_w #0.00001
     Ch_w_alpha= Ch_w_min/100
-    Ch_w_smooth=0.1
+    Ch_w_smooth = 0.1
     Ch_w_local = np.maximum(Ch_w_min, Ch_w_alpha * tc.h)
     xi  = (Ch - Ch_w_local) / (Ch_w_smooth * Ch_w_local)
-    phi = 0.5 * (1.0 + np.tanh(xi))          # 0–1 の連続マスク
-    wet_nodes = (phi > 0.05) & (tc.h > tc.h_w)   # 計算セル
+    phi_node = 0.5 * (1.0 + np.tanh(xi))          # 0–1 の連続マスク
+    tc.phi_node = phi_node
+    wet_nodes = (phi_node > 0.05) & (tc.h > tc.h_w)   # 計算セル
     tail = tc.grid.node_at_link_tail
     head = tc.grid.node_at_link_head
-    tc.phi_link = 0.5 * (phi[tail] + phi[head])
+    tc.phi_link = 0.5 * (phi_node[tail] + phi_node[head])
     #20250621 ADD#
 
     # wet_nodes = (Ch > Ch_w) & (tc.h > h_w)
@@ -217,6 +218,8 @@ def find_wet_grids(tc):
                                 np.concatenate(
                                     [tc.wet_pwet_links, tc.fixed_value_links]),
                                 assume_unique=True)
+    tc.h[tc.dry_nodes]  = 0.0
+    tc.Ch[tc.dry_nodes] = 0.0
 
 
 def process_partial_wet_grids(
@@ -272,6 +275,7 @@ def process_partial_wet_grids(
 
     # grid information
     dry_links = tc.dry_links
+    dry_links = dry_links[dry_links >= 0]
     horizontally_partial_wet_nodes = tc.horizontally_partial_wet_nodes
     vertically_partial_wet_nodes = tc.vertically_partial_wet_nodes
     horizontally_wettest_nodes = tc.horizontally_wettest_nodes
@@ -280,6 +284,7 @@ def process_partial_wet_grids(
     partial_wet_vertical_links = tc.partial_wet_vertical_links
     horizontal_direction_wettest = tc.horizontal_direction_wettest
     vertical_direction_wettest = tc.vertical_direction_wettest
+    # phi_link = tc.phi_link
 
     ######################################################
     # horizontal and vertical flow discharge between wet #
@@ -372,15 +377,15 @@ def process_partial_wet_grids_wdf(
     # ------------------------------------------------------------------
     eta_wet_h  = h[wet_h]  + eta[wet_h]
     eta_part_h = h[core_h] + eta[core_h]
-    eta_iface_h = 0.5*(eta_wet_h + eta_part_h)
-    hL_h = np.maximum(0.0, eta_iface_h - eta[wet_h])
-    hR_h = np.maximum(0.0, eta_iface_h - eta[core_h])
+    eta_iface_h = 0.5*eta_wet_h + 0.5*eta_part_h
+    hL_h = np.maximum(1e-2, eta_iface_h - eta[wet_h])
+    hR_h = np.maximum(1e-2, eta_iface_h - eta[core_h])
 
     eta_wet_v  = h[wet_v]  + eta[wet_v]
     eta_part_v = h[core_v] + eta[core_v]
-    eta_iface_v = 0.5*(eta_wet_v + eta_part_v)
-    hL_v = np.maximum(0.0, eta_iface_v - eta[wet_v])
-    hR_v = np.maximum(0.0, eta_iface_v - eta[core_v])
+    eta_iface_v = 0.5*eta_wet_v + 0.5*eta_part_v
+    hL_v = np.maximum(1e-2, eta_iface_v - eta[wet_v])
+    hR_v = np.maximum(1e-2, eta_iface_v - eta[core_v])
 
     # Depth update
     h_out[core_h] = hR_h
@@ -398,10 +403,11 @@ def process_partial_wet_grids_wdf(
     # ------------------------------------------------------------------
     # 2. Overspill velocities
     # ------------------------------------------------------------------
+    draining_limiter = 0.5
     vel_h = gamma * np.sqrt(2*R*g * hL_h * Ch[wet_h] / (hL_h + 1e-12))
     vel_v = gamma * np.sqrt(2*R*g * hL_v * Ch[wet_v] / (hL_v + 1e-12))
-    vel_h[draining_h] *= 0.5
-    vel_v[draining_v] *= 0.5
+    vel_h[draining_h] *= draining_limiter # Liu et al., 2018 https://doi.org/10.1016/j.jcp.2018.07.038
+    vel_v[draining_v] *= draining_limiter
 
     # ------------------------------------------------------------------
     # 3. Friction & velocity update

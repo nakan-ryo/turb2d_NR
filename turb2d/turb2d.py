@@ -972,6 +972,12 @@ class TurbidityCurrent2D(Component):
         self.bed_thick = self.eta - self.eta_init
         self.copy_values_to_grid()
 
+        # def _check_mass_leak(self):
+        leak = np.sum(self.Ch[self.dry_nodes])
+        if leak > 1e-10:
+            print(f"mass leak = {leak:.2e}")
+        
+
     def _advection_phase(self):
         """Calculate advection phase of the model
            Advection of flow velocities is calculated by CIP
@@ -1277,7 +1283,7 @@ class TurbidityCurrent2D(Component):
             * self.dt_local
             / self.h_link[self.wet_horizontal_links]
         )
-        self.u_temp[self.wet_horizontal_links] *= self.phi_link[self.wet_horizontal_links]
+        # self.u_temp[self.wet_horizontal_links] *= self.phi_link[self.wet_horizontal_links]
 
         self.v_temp[self.wet_vertical_links] /= (
             1
@@ -1298,7 +1304,7 @@ class TurbidityCurrent2D(Component):
             u_node=self.u_node_temp,
             v_node=self.v_node_temp,
         )
-        self.v_temp[self.wet_vertical_links] *= self.phi_link[self.wet_vertical_links]
+        # self.v_temp[self.wet_vertical_links] *= self.phi_link[self.wet_vertical_links]
 
     def _fluid_mass_conservation(self):
         """solve fluid mass conservation
@@ -1365,6 +1371,10 @@ class TurbidityCurrent2D(Component):
             Ch_link=self.Ch_link_temp,
         )
 
+        self.h_link_temp   *= self.phi_link
+        self.Ch_link_temp *= self.phi_link
+        self.Ch_link_i_temp *= self.phi_link
+
         # update boundary conditions
         self.update_boundary_conditions(
             h=self.h_temp,
@@ -1412,7 +1422,7 @@ class TurbidityCurrent2D(Component):
             )
             / dx2
         )
-        self.u_temp[wet_pwet_h_links] *= self.phi_link[wet_pwet_h_links]
+        # self.u_temp[wet_pwet_h_links] *= self.phi_link[wet_pwet_h_links]
 
         self.v_temp[wet_pwet_v_links] += (
             self.nu_t[wet_pwet_v_links]
@@ -1437,7 +1447,7 @@ class TurbidityCurrent2D(Component):
             u_node=self.u_node_temp,
             v_node=self.v_node_temp,
         )
-        self.v_temp[wet_pwet_v_links] *= self.phi_link[wet_pwet_v_links]
+        # self.v_temp[wet_pwet_v_links] *= self.phi_link[wet_pwet_v_links]
 
         # map values
         map_links_to_nodes(
