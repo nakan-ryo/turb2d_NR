@@ -334,6 +334,7 @@ def create_init_flow_region(
 
     # set initial flow region
     print(initial_region_shape)
+
     if initial_region_shape == "circle":
         initial_flow_region = (
             (grid.node_x - initial_region_center[0]) ** 2
@@ -386,7 +387,8 @@ def create_init_flow_region(
         # grid_data = median_filter(grid_data, size=filter_size)
 
         initial_flow_thickness = np.where(grid_data < 1, 0, grid_data).flatten() * height_factor
-        print(sum(initial_flow_thickness)/1000, "km^3")
+        # initial_flow_thickness = initial_flow_thickness*0 + 10
+        print((sum(initial_flow_thickness)/1000)*(111*(dx+dy)/2)**2, "km^3")
         grid.at_node["flow__depth"][initial_flow_region] = initial_flow_thickness[initial_flow_region]
 
 

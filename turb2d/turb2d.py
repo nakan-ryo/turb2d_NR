@@ -343,6 +343,7 @@ class TurbidityCurrent2D(Component):
             print(self.sed_entrainment_func)
         # print(self.dx)
         # Now setting up fields at nodes and links
+
         try:
             self.eta = grid.add_zeros(
                 "topographic__elevation",
@@ -997,8 +998,6 @@ class TurbidityCurrent2D(Component):
             out_dfdx=self.dudx_temp,
             out_dfdy=self.dudy_temp,
         )
-        self.u_temp[self.wet_pwet_horizontal_links] *= self.phi_link[self.wet_pwet_horizontal_links]
-
         self.cip2d.run(
             self.v,
             self.dvdx,
@@ -1014,7 +1013,9 @@ class TurbidityCurrent2D(Component):
             out_dfdx=self.dvdx_temp,
             out_dfdy=self.dvdy_temp,
         )
-        self.v_temp[self.wet_pwet_vertical_links] *= self.phi_link[self.wet_pwet_vertical_links]
+        if self.phi_link:
+            self.u_temp[self.wet_pwet_horizontal_links] *= self.phi_link[self.wet_pwet_horizontal_links]
+            self.v_temp[self.wet_pwet_vertical_links] *= self.phi_link[self.wet_pwet_vertical_links]
 
         self.cip2d.run(
             self.h,
@@ -1370,10 +1371,10 @@ class TurbidityCurrent2D(Component):
             Ch_link_i=self.Ch_link_i_temp,
             Ch_link=self.Ch_link_temp,
         )
-
-        self.h_link_temp   *= self.phi_link
-        self.Ch_link_temp *= self.phi_link
-        self.Ch_link_i_temp *= self.phi_link
+        if self.phi_link:
+            self.h_link_temp   *= self.phi_link
+            self.Ch_link_temp *= self.phi_link
+            self.Ch_link_i_temp *= self.phi_link
 
         # update boundary conditions
         self.update_boundary_conditions(
@@ -2229,8 +2230,11 @@ class TurbidityCurrent2D(Component):
             self.Ds,
             self.nu,
             u_star,
+            U_node[nodes],
+            h[nodes],
             Fr,
             self.bed_active_layer[:, nodes],
+            r0,
             self.p_coef,
             self.camax,
             function=self.sed_entrainment_func,

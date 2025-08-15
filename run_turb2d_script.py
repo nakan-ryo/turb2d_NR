@@ -21,24 +21,32 @@ root_path = os.getcwd()
 xlim = [-57.5, -50.5]
 ylim = [37.0, 45.5]
 spacing = 1000 #m
-grid_degree = [0.0121603, 0.0086239] #x, y
-
-#QGIS WGS84 to UTM(NAD27 / UTM zone 21N) to WGS84
-grid = create_topography_from_geotiff(os.path.join(root_path,"bathymetry/GB04_WGS_1000.tif"),
+if spacing==1000:
+    grid_degree = [0.0121603, 0.0086239] #x, y 
+    grid = create_topography_from_geotiff(os.path.join(root_path,"bathymetry/GB04_WGS_1000.tif"),
                                        xlim=xlim, ylim=ylim, spacing=spacing, filter_size=[10, 10],
                                        distribution_filename="bathymetry/GB_sand01.tif",
                                        setting_gs = [0.4, 0.4, 0.2] # if None is same ratio in all grain size
                                        )
+    ini_type = "bathymetry/GB_vfill_2.tif" #"rectangle" #"circle" #"inlet" #
+else:
+    grid_degree = [0.00608, 0.004312] #x, y 0.0121603, 0.0086239
+    #QGIS WGS84 to UTM(NAD27 / UTM zone 21N) to WGS84
+    grid = create_topography_from_geotiff(os.path.join(root_path,"bathymetry/GB04_WGS_500m.tif"),
+                                        xlim=xlim, ylim=ylim, spacing=spacing, filter_size=[10, 10],
+                                        distribution_filename="bathymetry/GB_sand01_500m.tif",
+                                        setting_gs = [0.4, 0.4, 0.2] # if None is same ratio in all grain size
+                                        )
+    ini_type = "bathymetry/GB_vfill_2_500m.tif" #"rectangle" #"circle" #"inlet" #
 #-------------------------------------------------------------------------------------------
 
 #----------------------BASE SETTING-----------------------------------------------------------
 path = "/mnt/c/turb2d" #"/mnt/f/Turb2d/Test"
 obs_csv = 'obs_csv/obs_list.csv'
-dirname = 'GB363'#'YC086'#'GB222' #"test2024-04" #
+dirname = 'GB380'#'YC086'#'GB222' #"test2024-04" #
 last = 3*24*60*60 #8640 #100000
 itsnap = 20*60
 random_sw = False #True #
-ini_type = "bathymetry/GB_vfill_2.tif" #"rectangle" #"circle" #"inlet" #
 Ds = [1.8e-4, 6.4e-5, 3.0e-5]
 #-------------------------------------------------------------------------------------------
 

@@ -106,7 +106,7 @@ def get_ws(R, g, Ds, nu):
     return ws
 
 
-def get_es(R, g, Ds, nu, u_star, Fr, bed_active_layer, p_coef, camax, function="GP1991field", out=None):
+def get_es(R, g, Ds, nu, u_star, U, h, Fr, bed_active_layer, r0, p_coef, camax, function="GP1991field", out=None):
     """ Calculate entrainment rate of basal sediment to suspension using
         empirical functions proposed by Garcia and Parker (1991),
         van Rijn (1984), or Dorrell (2018)
@@ -155,7 +155,7 @@ def get_es(R, g, Ds, nu, u_star, Fr, bed_active_layer, p_coef, camax, function="
     if function == "Traer2012":
         _gp1991(R, g, Ds, nu, u_star, p=p_coef, alpha = 0.68, beta=2.8, out=out)
     if function== 'wright_and_parker(2004)':
-        _wright_and_parker(R, g, Ds, nu, u_star, sigma=0.52, slope_inside=2.4*10**-5, out=None) #slope_inside=2.4*10**-5
+        _wright_and_parker(R, g, Ds, nu, u_star, sigma=0.52, slope_inside=2.4*10**-5, out=out) #slope_inside=2.4*10**-5
     if function == "Leeuw2020P3":
         _l2020p3(R, g, Ds, nu, u_star, Fr, out=out)
     if function == "Leeuw2020P2":
@@ -165,11 +165,13 @@ def get_es(R, g, Ds, nu, u_star, Fr, bed_active_layer, p_coef, camax, function="
     if function == "NRv1":
         _NRv1(R, g, Ds, nu, u_star, p=p_coef, beta=3.0, out=out)
     if function == "NRv2":
-        _NRv2(R, g, Ds, nu, u_star, bed_active_layer, p=p_coef, beta=5.0, camax=camax, out=out)
+        _NRv2(R, g, Ds, nu, u_star, bed_active_layer, p=p_coef, beta=2.8, camax=camax, a=1.3*10**-7, alpha_2=0.678, out=out)
     if function == "NRv3":
-        _NRv3(R, g, Ds, nu, u_star, p=p_coef, beta=3.0, camax=camax, out=out)
+        _NRv2(R, g, Ds, nu, u_star, p=p_coef, beta=3.0, camax=camax, out=out)
     if function == "NRv4":
-        _NRv2(R, g, Ds, nu, u_star, bed_active_layer, p=p_coef, beta=1.5, camax=camax, out=out)
+        _NRv2(R, g, Ds, nu, u_star, bed_active_layer, p=p_coef, beta=1.5, camax=camax, a=7.7e-05,  alpha_2=0.6, out=out)
+    if function == "Fukuda2023":    
+        _fukuda_etal_2023(u_star, U, g, R, h, Ds, nu, r0, out=out)
     return out
 
 def _NRv1(R, g, Ds, nu, u_star, p, beta=3.0, out=None):
@@ -217,7 +219,7 @@ def _NRv1(R, g, Ds, nu, u_star, p, beta=3.0, out=None):
 
     return out
 
-def _NRv2(R, g, Ds, nu, u_star, bed_active_layer, p, beta=2.8, camax=0.3, out=None):
+def _NRv2(R, g, Ds, nu, u_star, bed_active_layer, p, beta=2.8, camax=0.3, a=7.7e-05, alpha_2=0.6, out=None):
 
     if out is None:
         out = np.zeros([len(Ds), u_star.shape])
@@ -234,11 +236,11 @@ def _NRv2(R, g, Ds, nu, u_star, bed_active_layer, p, beta=2.8, camax=0.3, out=No
     sigma = np.sqrt(np.sum(bed_active_layer * (Ds_phi - D50_phi) ** 2, axis=0)) #1.0
     kshi = 1 -0.288 * sigma
     # a = 1.3 * 10**-7 #7*10**-6 #
-    a = 7.7e-05
+    # a = 7.7e-05
 
     # coefficients for calculation
     alpha_1 = 1
-    alpha_2 = 0.6 #0.678 #
+    # alpha_2 = 0.6 #0.678 #
 
     # calculate entrainment rate
     # Z = alpha_1 * sus_index * Rp ** alpha_2 * kshi
@@ -247,29 +249,6 @@ def _NRv2(R, g, Ds, nu, u_star, bed_active_layer, p, beta=2.8, camax=0.3, out=No
     out[:, :] = p * a * Z ** beta / (1 + (a / camax) * Z ** beta) #* (Ds/D50)**0.2
 
     return out
-
-# def _NRv3(R, g, Ds, nu, u_star, p, beta=2.8, camax=0.3, out=None):
-#
-#     if out is None:
-#         out = np.zeros([len(Ds), u_star.shape])
-#
-#     # basic parameters
-#     ws = get_ws(R, g, Ds, nu)
-#
-#     # calculate subordinate parameters
-#     Rp = np.sqrt(R * g * Ds) * Ds / nu
-#     sus_index = u_star / ws
-#     a = 1.3 * 10**-7
-#
-#     # coefficients for calculation
-#     alpha_1=1
-#     alpha_2=0.68
-#
-#     # calculate entrainment rate
-#     Z = alpha_1 * sus_index * Rp ** alpha_2
-#     out[:, :] = p * a * Z ** beta / (1 + (a / camax) * Z ** beta)
-#
-#     return out
 
 def _gp1991(R, g, Ds, nu, u_star, p, alpha = 0.6, beta=5.0, out=None):
     """ Calculate entrainment rate of basal sediment to suspension
@@ -312,6 +291,27 @@ def _gp1991(R, g, Ds, nu, u_star, p, alpha = 0.6, beta=5.0, out=None):
     # with open('/mnt/d/turb2d/es_trear2012.csv', 'a') as f:
     #     writer = csv.writer(f)
     #     writer.writerow(out_res)
+
+    return out
+
+def _fukuda_etal_2023(u_star, U, g, R, h, Ds, nu, r0, out=None):
+    """Calculate sediment entrainment rate based on fukuda et al. (2023).
+    First, depth-averaged concentration is calculated. 
+    Sediment entrainment rate (basal sediment concentration) is calculated using cb = r0*C.
+    """
+
+    if out is None:
+        out = np.zeros([len(Ds), u_star.shape])
+
+    ws = get_ws(R, g, Ds, nu)
+
+    P_f = u_star**2*(np.abs(U))
+    N_f = g*R*h*ws
+    flow_power = P_f/N_f
+    # phi = (5.6*10**(-3))*flow_power**(0.36)
+    phi = (1.1*10**(-2))*flow_power**(0.49)
+
+    out[:, :] = r0*phi
 
     return out
 

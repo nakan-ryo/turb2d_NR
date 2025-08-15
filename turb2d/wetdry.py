@@ -111,20 +111,21 @@ def find_wet_grids(tc):
     #     (p[north_nodes_at_link] > p_w) & (p[south_nodes_at_link] > p_w))]
 
     #20250621 ADD#
-    Ch_w_min = Ch_w #0.00001
-    Ch_w_alpha= Ch_w_min/100
-    Ch_w_smooth = 0.1
-    Ch_w_local = np.maximum(Ch_w_min, Ch_w_alpha * tc.h)
-    xi  = (Ch - Ch_w_local) / (Ch_w_smooth * Ch_w_local)
-    phi_node = 0.5 * (1.0 + np.tanh(xi))          # 0–1 の連続マスク
-    tc.phi_node = phi_node
-    wet_nodes = (phi_node > 0.05) & (tc.h > tc.h_w)   # 計算セル
-    tail = tc.grid.node_at_link_tail
-    head = tc.grid.node_at_link_head
-    tc.phi_link = 0.5 * (phi_node[tail] + phi_node[head])
+    # Ch_w_min = Ch_w #0.00001
+    # Ch_w_alpha= Ch_w_min/100
+    # Ch_w_smooth = 0.1
+    # Ch_w_local = np.maximum(Ch_w_min, Ch_w_alpha * tc.h)
+    # xi  = (Ch - Ch_w_local) / (Ch_w_smooth * Ch_w_local)
+    # phi_node = 0.5 * (1.0 + np.tanh(xi))          # 0–1 の連続マスク
+    # tc.phi_node = phi_node
+    # wet_nodes = (phi_node > 0.05) & (tc.h > tc.h_w)   # 計算セル
+    # tail = tc.grid.node_at_link_tail
+    # head = tc.grid.node_at_link_head
+    # tc.phi_link = 0.5 * (phi_node[tail] + phi_node[head])
     #20250621 ADD#
 
-    # wet_nodes = (Ch > Ch_w) & (tc.h > h_w)
+    wet_nodes = (Ch > Ch_w) & (tc.h > h_w)
+    tc.phi_link = None
 
     tc.wet_nodes = core[wet_nodes[core]]
     tc.wet_horizontal_links = horiz_links[
@@ -355,6 +356,7 @@ def process_partial_wet_grids_wdf(
     """Wetting/Drying Front Reconstruction (Bollermann et al., 2014) with
     draining limiter, and depth + gradual sediment update at partial‑wet nodes.
     """
+    draining_limiter = 0.5
     if h_out is None: h_out = h.copy()
     if u_out is None: u_out = u.copy()
     if v_out is None: v_out = v.copy()
@@ -403,7 +405,6 @@ def process_partial_wet_grids_wdf(
     # ------------------------------------------------------------------
     # 2. Overspill velocities
     # ------------------------------------------------------------------
-    draining_limiter = 0.5
     vel_h = gamma * np.sqrt(2*R*g * hL_h * Ch[wet_h] / (hL_h + 1e-12))
     vel_v = gamma * np.sqrt(2*R*g * hL_v * Ch[wet_v] / (hL_v + 1e-12))
     vel_h[draining_h] *= draining_limiter # Liu et al., 2018 https://doi.org/10.1016/j.jcp.2018.07.038
