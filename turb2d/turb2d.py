@@ -68,7 +68,7 @@ class TurbidityCurrent2D(Component):
         "flow__surface_elevation",
         "bed__active_layer_fraction_i",
         "bed__sediment_volume_per_unit_area_i",
-        "max__erosion_i",
+        "max_erosion_i",
     )
 
     _output_var_names = (
@@ -83,7 +83,7 @@ class TurbidityCurrent2D(Component):
         "flow__surface_elevation",
         "bed__active_layer_fraction_i",
         "bed__sediment_volume_per_unit_area_i",
-        "max__erosion_i",
+        "max_erosion_i",
     )
 
     _var_units = {
@@ -99,7 +99,7 @@ class TurbidityCurrent2D(Component):
         "bed__active_layer_fraction_i": "1",
         "deriviation_of_bed__active_layer_fraction_i": "1",
         "bed__sediment_volume_per_unit_area_i": "m",
-        "max__erosion_i": "m",
+        "max_erosion_i": "m",
     }
 
     _var_mapping = {
@@ -114,7 +114,7 @@ class TurbidityCurrent2D(Component):
         "flow__surface_elevation": "node",
         "bed__active_layer_fraction_i": "node",
         "bed__sediment_volume_per_unit_area_i": "node",
-        "max__erosion_i": "node",
+        "max_erosion_i": "node",
     }
 
     _var_doc = {
@@ -133,7 +133,7 @@ class TurbidityCurrent2D(Component):
         "the ith grain size class in active layer",
         "bed__sediment_volume_per_unit_area_i": "Sediment volume per"
         " unit area of the ith grain size class",
-        "max__erosion_i": "Maximum erosion depth",
+        "max_erosion_i": "Maximum erosion depth",
     }
 
     def __init__(
@@ -371,9 +371,9 @@ class TurbidityCurrent2D(Component):
             )
             for i in range(self.number_gclass):
                 self.max_erosion_i[i, :] = grid.add_zeros(
-                    "max__erosion_" + str(i),
+                    "max_erosion_" + str(i),
                     at="node",
-                    units=self._var_units["max__erosion_i"],
+                    units=self._var_units["max_erosion_i"],
                     )
         except FieldError:
             for i in range(self.number_gclass):
@@ -1013,7 +1013,9 @@ class TurbidityCurrent2D(Component):
             out_dfdx=self.dvdx_temp,
             out_dfdy=self.dvdy_temp,
         )
-        if self.phi_link:
+        if self.phi_link is None:
+            self.phi_link=None
+        else:    
             self.u_temp[self.wet_pwet_horizontal_links] *= self.phi_link[self.wet_pwet_horizontal_links]
             self.v_temp[self.wet_pwet_vertical_links] *= self.phi_link[self.wet_pwet_vertical_links]
 
@@ -1371,7 +1373,9 @@ class TurbidityCurrent2D(Component):
             Ch_link_i=self.Ch_link_i_temp,
             Ch_link=self.Ch_link_temp,
         )
-        if self.phi_link:
+        if self.phi_link is None:
+            self.phi_link=None
+        else:  
             self.h_link_temp   *= self.phi_link
             self.Ch_link_temp *= self.phi_link
             self.Ch_link_i_temp *= self.phi_link
@@ -2200,7 +2204,6 @@ class TurbidityCurrent2D(Component):
         nodes = self.wet_nodes
         dt = self.dt_local
         ws = self.ws
-        r0 = self.r0
         node_east = self.node_east[nodes]
         node_west = self.node_west[nodes]
         node_north = self.node_north[nodes]
@@ -2210,9 +2213,17 @@ class TurbidityCurrent2D(Component):
         # copy previous values of Ch
         self.Ch_i_prev[:, nodes] = Ch_i[:, nodes]
 
-        # Calculate shear velocity
         u_star = np.sqrt(self.Cf_node[nodes] * U_node[nodes] * U_node[nodes]) # Engelund and Hansen (1967)
-        # Calculate froude number
+
+        if self.r0 != 0:
+            r0 = self.r0
+        else:
+            r0 = 1.0 + 31.5 * np.power(
+                np.maximum(np.asarray(u_star, dtype=np.float64)[None, :], 1e-8) / np.asarray(ws, dtype=np.float64), 
+                -1.46)   # (g,N)
+
+        r0 = np.ascontiguousarray(r0, dtype=np.float64)
+
         Fr = U_node[nodes] / np.sqrt(self.g * (h[nodes]+0.01))
         # U =  U_node[nodes]
         # with open('shear3.csv', 'a') as f:
@@ -2233,6 +2244,7 @@ class TurbidityCurrent2D(Component):
             U_node[nodes],
             h[nodes],
             Fr,
+            self.ew_node[nodes],
             self.bed_active_layer[:, nodes],
             r0,
             self.p_coef,
@@ -2431,93 +2443,185 @@ class TurbidityCurrent2D(Component):
             self.dKhdy_temp = self.dKhdy[:]
 
     def copy_values_to_grid(self):
-        """Copy flow parameters to grid
-        """
-        if self.elapsed_time < self.duration:
-            self.h2 = np.clip(self.h + self.init_h, None, np.max(self.init_h)) #######################
-            # self.Ch_i2 = np.clip(self.Ch_i + self.init_Ch, None, np.max(self.Ch_i)) #######################
-            self.Ch_i2 = self.Ch_i + self.init_Ch / 100
-        else:
-            self.h2 = self.h
-            self.Ch_i2 = self.Ch_i
-        self.grid.at_node["flow__depth"] = self.h2
-        self.grid.at_link["flow__horizontal_velocity"] = self.u
-        self.grid.at_link["flow__vertical_velocity"] = self.v
-        self.C_i[:, :] = self.C_init
-        all_wet_nodes = np.where(self.h > self.h_w)
-        self.C_i[:, all_wet_nodes] = (self.Ch_i2[:,all_wet_nodes]) / self.h2[all_wet_nodes] #######################
-        # self.C_i[:, all_wet_nodes] = (self.Ch_i[:,all_wet_nodes] + self.Ch_i[:,all_wet_nodes]/100) / self.h2[all_wet_nodes]
+        """Copy flow parameters to grid (safe, no reallocation each step)."""
+
+        def _as_1d_f64_c(a):
+            return np.asarray(a, dtype=np.float64, order="C").reshape(-1)
+
+        def _set_node_field(grid, name, val):
+            val = _as_1d_f64_c(val)
+            n = grid.number_of_nodes
+            if val.shape[0] != n:
+                raise ValueError(f"{name}: expected ({n},) got {val.shape}")
+            if name in grid.at_node:
+                np.copyto(grid.at_node[name], val)
+            else:
+                grid.add_field("node", name, val.copy(), clobber=True)
+
+        def _set_link_field(grid, name, val):
+            val = _as_1d_f64_c(val)
+            m = grid.number_of_links
+            if val.shape[0] != m:
+                raise ValueError(f"{name}: expected ({m},) got {val.shape}")
+            if name in grid.at_link:
+                np.copyto(grid.at_link[name], val)
+            else:
+                grid.add_field("link", name, val.copy(), clobber=True)
+
+        g = int(self.number_gclass)
+        N = int(self.grid.number_of_nodes)
+
+        # 型/レイアウトを統一
+        self.C_i    = np.asarray(self.C_i,    dtype=np.float64, order="C")
+        self.C      = np.asarray(self.C,      dtype=np.float64, order="C")
+        self.h      = np.asarray(self.h,      dtype=np.float64, order="C")
+        self.Ch_i   = np.asarray(self.Ch_i,   dtype=np.float64)      # ここを明示
+
+        # 形状チェック
+        if self.C_i.shape != (g, N):
+            raise ValueError(f"C_i shape {self.C_i.shape} != (g={g}, N={N})")
+        if self.h.shape != (N,):
+            raise ValueError(f"h shape {self.h.shape} != (N,)")
+
+        self.C_i.fill(float(self.C_init))
+
+        wet = np.flatnonzero(self.h > self.h_w)
+        if wet.size:
+            Ch = np.asarray(self.Ch_i, dtype=np.float64)  # (g,N) or (g,1)/(g,) etc.
+
+            if Ch.shape == (g, N):
+                rhs = Ch[:, wet]                                    # (g, |wet|)
+            elif Ch.shape in [(g, 1), (g,)]:
+                rhs = np.broadcast_to(Ch.reshape(g, 1), (g, wet.size))
+            elif Ch.shape in [(1, N), (N,)]:
+                rhs = np.broadcast_to(Ch.reshape(1, N)[:, wet], (g, wet.size))
+            else:
+                raise ValueError(f"Ch_i shape {Ch.shape} not broadcastable to (g,N)")
+
+            denom = np.asarray(self.h, dtype=np.float64)[wet].reshape(1, wet.size)  # (1,|wet|)
+            tmp = np.empty((g, wet.size), dtype=np.float64)
+            np.divide(rhs, denom, out=tmp, casting="unsafe")
+            self.C_i[:, wet] = tmp
+
+        # # --- 合計を out= で書き込み（新規配列を作らない）---
+        # C_arr = np.array(self.C, dtype=np.float64, order="C", copy=False)
+        # if (C_arr.shape != (N,)) or (not C_arr.flags.writeable) or (not C_arr.flags.c_contiguous):
+        #     C_arr = np.array(C_arr, dtype=np.float64, order="C", copy=True)
+        #     self.C = C_arr  # 属性を更新して以後も同じバッファを使う
+
+        if self.C.shape != (N,) or (not self.C.flags.c_contiguous) or (not self.C.flags.writeable):
+            self.C = np.array(self.C, dtype=np.float64, order="C", copy=True)
+        C_new = self.C_i.sum(axis=0, dtype=np.float64)
+        self.C[...] = C_new
+
+        # -------- node fields ----------
+        _set_node_field(self.grid, "flow__depth",                        self.h)
+        _set_node_field(self.grid, "flow__sediment_concentration_total", self.C)
+        _set_node_field(self.grid, "topographic__elevation",             self.eta)
+        _set_node_field(self.grid, "bed__thickness",                     self.bed_thick)
+        _set_node_field(self.grid, "flow__surface_elevation",            self.eta + self.h)
+        _set_node_field(self.grid, "flow__horizontal_velocity_at_node",  self.u_node)
+        _set_node_field(self.grid, "flow__vertical_velocity_at_node",    self.v_node)
+        _set_node_field(self.grid, "flow_depth__horizontal_gradient",    self.dhdx)
+        _set_node_field(self.grid, "flow_depth__vertical_gradient",      self.dhdy)
+
+        # per-size-class node fields
         for i in range(self.number_gclass):
-            self.grid.at_node["flow__sediment_concentration_" + str(i)] = self.C_i[i, :]
-            self.grid.at_node["flow_sediment_volume__horizontal_gradient_" + str(i)] = (
-                self.dChdx_i[i, :]
-            )
-            self.grid.at_node["flow_sediment_volume__vertical_gradient_" + str(i)] = (
-                self.dChdy_i[i, :]
-            )
-            self.grid.at_node["bed__sediment_volume_per_unit_area_" + str(i)] = (
-                self.bed_thick_i[i, :]
-            )
-            self.grid.at_node["bed__active_layer_fraction_" + str(i)] = (
-                self.bed_active_layer[i, :]
-            )
-            self.grid.at_node["max__erosion_" + str(i)] = (
-                self.max_erosion_i[i, :]
-            )
-        self.C[:] = np.sum(self.C_i, axis=0)
-        self.grid.at_node["flow__sediment_concentration_total"] = self.C
-        self.grid.at_node["topographic__elevation"] = self.eta
-        # self.grid.at_node["max__erosion"] = self.max_erosion
-        self.grid.at_node["bed__thickness"] = self.bed_thick
-        self.grid.at_node["flow__surface_elevation"] = self.eta + self.h
-        self.grid.at_node["flow__horizontal_velocity_at_node"] = self.u_node
-        self.grid.at_node["flow__vertical_velocity_at_node"] = self.v_node
-        self.grid.at_link["flow_horizontal_velocity__horizontal_gradient"] = self.dudx
-        self.grid.at_link["flow_horizontal_velocity__vertical_gradient"] = self.dudy
-        self.grid.at_link["flow_vertical_velocity__horizontal_gradient"] = self.dvdx
-        self.grid.at_link["flow_vertical_velocity__vertical_gradient"] = self.dvdy
-        self.grid.at_node["flow_depth__horizontal_gradient"] = self.dhdx
-        self.grid.at_node["flow_depth__vertical_gradient"] = self.dhdy
-        if self.model == "4eq":
-            self.grid.at_link["flow__TKE"] = self.Kh
-            self.grid.at_link["flow_TKE__horizontal_gradient"] = self.dKhdx
-            self.grid.at_link["flow_TKE__vertical_gradient"] = self.dKhdy
+            idx = int(i)
+            _set_node_field(self.grid, f"flow__sediment_concentration_{idx}",              self.C_i[idx, :])
+            _set_node_field(self.grid, f"flow_sediment_volume__horizontal_gradient_{idx}", self.dChdx_i[idx, :])
+            _set_node_field(self.grid, f"flow_sediment_volume__vertical_gradient_{idx}",   self.dChdy_i[idx, :])
+            _set_node_field(self.grid, f"bed__sediment_volume_per_unit_area_{idx}",        self.bed_thick_i[idx, :])
+            _set_node_field(self.grid, f"bed__active_layer_fraction_{idx}",                self.bed_active_layer[idx, :])
+            _set_node_field(self.grid, f"max_erosion_{idx}",                               self.max_erosion_i[idx, :]) 
+
+        # -------- link fields ----------
+        _set_link_field(self.grid, "flow__horizontal_velocity",                          self.u)
+        _set_link_field(self.grid, "flow__vertical_velocity",                            self.v)
+        _set_link_field(self.grid, "flow_horizontal_velocity__horizontal_gradient",      self.dudx)
+        _set_link_field(self.grid, "flow_horizontal_velocity__vertical_gradient",        self.dudy)
+        _set_link_field(self.grid, "flow_vertical_velocity__horizontal_gradient",        self.dvdx)
+        _set_link_field(self.grid, "flow_vertical_velocity__vertical_gradient",          self.dvdy)
+
+        if getattr(self, "model", None) == "4eq":
+            _set_link_field(self.grid, "flow__TKE",                     self.Kh)
+            _set_link_field(self.grid, "flow_TKE__horizontal_gradient", self.dKhdx)
+            _set_link_field(self.grid, "flow_TKE__vertical_gradient",   self.dKhdy)
 
     def update_values(self):
-        """Update variables from temporally variables and
-           apply boundary conditions
-        """
+        """Update variables from temporally variables and apply boundary conditions"""
 
-        # adjust abnormal values
+        import numpy as np
+
+        # 1) 異常値クリーニング
         self._remove_abnormal_values()
 
-        # copy values from temp to grid values
-        self.h[:] = self.h_temp[:]
-        self.dhdx[:] = self.dhdx_temp[:]
-        self.dhdy[:] = self.dhdy_temp[:]
-        self.u[:] = self.u_temp[:]
-        self.dudx[:] = self.dudx_temp[:]
-        self.dudy[:] = self.dudy_temp[:]
-        self.v[:] = self.v_temp[:]
-        self.dvdx[:] = self.dvdx_temp[:]
-        self.dvdy[:] = self.dvdy_temp[:]
-        self.Ch_i[:, :] = self.Ch_i_temp[:, :]
-        self.dChdx_i[:, :] = self.dChdx_i_temp[:, :]
-        self.dChdy_i[:, :] = self.dChdy_i_temp[:, :]
-        self.Ch_temp[:] = np.sum(self.Ch_i, axis=0)
-        self.Ch[:] = self.Ch_temp[:]
-        self.bed_thick_i[:, :] = self.bed_thick_i_temp[:, :]
-        self.max_erosion_i[:, :] = np.minimum(self.max_erosion_i[:, :],
-                                    self.bed_thick_i_temp[:, :])
-        self.eta[:] = self.eta_temp[:]
-        self.U[:] = self.U_temp[:]
-        self.U_node[:] = self.U_node_temp[:]
-        if self.model == "4eq":
-            self.Kh[:] = self.Kh_temp[:]
-            self.dKhdx[:] = self.dKhdx_temp[:]
-            self.dKhdy[:] = self.dKhdy_temp[:]
+        # 2) in-place コピー（形状/型を事前に統一）
+        def _copy_like(dst, src, name):
+            a = np.asarray(src, dtype=np.float64, order="C")
+            b = np.asarray(dst, dtype=np.float64, order="C")
+            if a.shape != b.shape:
+                raise ValueError(f"{name}: shape mismatch {a.shape} != {b.shape}")
+            np.copyto(b, a)   # b は dst の view（C連続に直したい場合は別対応）
+            if b is not dst:
+                # 元のバッファがC連続/float64でなければ差し替え
+                setattr(self, name, b)
 
-        # update boundary conditions
+        # node scalars / vectors
+        _copy_like(self.h,    self.h_temp,    "h")
+        _copy_like(self.dhdx, self.dhdx_temp, "dhdx")
+        _copy_like(self.dhdy, self.dhdy_temp, "dhdy")
+        _copy_like(self.u,    self.u_temp,    "u")
+        _copy_like(self.dudx, self.dudx_temp, "dudx")
+        _copy_like(self.dudy, self.dudy_temp, "dudy")
+        _copy_like(self.v,    self.v_temp,    "v")
+        _copy_like(self.dvdx, self.dvdx_temp, "dvdx")
+        _copy_like(self.dvdy, self.dvdy_temp, "dvdy")
+
+        # multi-class fields (g, N)
+        _copy_like(self.Ch_i,    self.Ch_i_temp,    "Ch_i")
+        _copy_like(self.dChdx_i, self.dChdx_i_temp, "dChdx_i")
+        _copy_like(self.dChdy_i, self.dChdy_i_temp, "dChdy_i")
+        _copy_like(self.bed_thick_i, self.bed_thick_i_temp, "bed_thick_i")
+
+        # max_erosion_i は「現在値」と「新しい bed_thick_i_temp」との min を取り直す
+        a = np.minimum(
+            np.asarray(self.max_erosion_i,    dtype=np.float64, order="C"),
+            np.asarray(self.bed_thick_i_temp, dtype=np.float64, order="C"),
+        )
+        if a.shape != self.max_erosion_i.shape:
+            raise ValueError(f"max_erosion_i: shape mismatch {a.shape} != {self.max_erosion_i.shape}")
+        np.copyto(self.max_erosion_i, a)
+
+        # scalars / vectors
+        _copy_like(self.eta,     self.eta_temp,   "eta")
+        _copy_like(self.U,       self.U_temp,     "U")
+        _copy_like(self.U_node,  self.U_node_temp,"U_node")
+
+        if getattr(self, "model", None) == "4eq":
+            _copy_like(self.Kh,    self.Kh_temp,    "Kh")
+            _copy_like(self.dKhdx, self.dKhdx_temp, "dKhdx")
+            _copy_like(self.dKhdy, self.dKhdy_temp, "dKhdy")
+
+        # 3) Ch（総量）を安全に合成：add.reduce（dtype固定）で一旦ローカルに作ってから in-place 代入
+        Ch_i_c = np.asarray(self.Ch_i, dtype=np.float64, order="C")
+        Ch_new = np.add.reduce(Ch_i_c, axis=0, dtype=np.float64)  # (N,)
+        # self.Ch_temp が存在する前提を維持しつつ、形状だけ検証
+        if np.asarray(self.Ch_temp).shape != Ch_new.shape:
+            # 一部のスクリプトでは self.Ch_temp を参照しているので形だけ合わせる
+            self.Ch_temp = np.array(Ch_new, dtype=np.float64, order="C", copy=True)
+        else:
+            np.copyto(self.Ch_temp, Ch_new)
+
+        # Ch 本体も同様に in-place 更新（C連続・書込可でなければ差し替え）
+        if (np.asarray(self.Ch).shape != Ch_new.shape or
+            (not np.asarray(self.Ch).flags.c_contiguous) or
+            (not np.asarray(self.Ch).flags.writeable)):
+            self.Ch = np.array(Ch_new, dtype=np.float64, order="C", copy=True)
+        else:
+            np.copyto(self.Ch, Ch_new)
+
+        # 4) 境界条件の更新（元の引数セットを維持）
         self.update_boundary_conditions(
             h=self.h,
             u=self.u,
@@ -2530,8 +2634,9 @@ class TurbidityCurrent2D(Component):
             u_node=self.u_node,
             v_node=self.v_node,
             eta=self.eta,
-            Kh=self.Kh,
+            Kh=getattr(self, "Kh", None),
         )
+
 
     def calc_nu_t(self, u, v, h_link, out=None):
         """Calculate eddy viscosity for horizontal diffusion of momentum
@@ -2625,7 +2730,7 @@ class TurbidityCurrent2D(Component):
         )
 
         variable_names.extend(
-            ["max__erosion_{}".format(i)
+            ["max_erosion_{}".format(i)
                 for i in range(self.number_gclass)]
         )
 

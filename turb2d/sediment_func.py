@@ -106,7 +106,7 @@ def get_ws(R, g, Ds, nu):
     return ws
 
 
-def get_es(R, g, Ds, nu, u_star, U, h, Fr, bed_active_layer, r0, p_coef, camax, function="GP1991field", out=None):
+def get_es(R, g, Ds, nu, u_star, U, h, Fr, ew, bed_active_layer, r0, p_coef, camax, function="GP1991field", out=None):
     """ Calculate entrainment rate of basal sediment to suspension using
         empirical functions proposed by Garcia and Parker (1991),
         van Rijn (1984), or Dorrell (2018)
@@ -171,7 +171,7 @@ def get_es(R, g, Ds, nu, u_star, U, h, Fr, bed_active_layer, r0, p_coef, camax, 
     if function == "NRv4":
         _NRv2(R, g, Ds, nu, u_star, bed_active_layer, p=p_coef, beta=1.5, camax=camax, a=7.7e-05,  alpha_2=0.6, out=out)
     if function == "Fukuda2023":    
-        _fukuda_etal_2023(u_star, U, g, R, h, Ds, nu, r0, out=out)
+        _fukuda_etal_2023(u_star, U, g, R, h, Ds, nu, r0, ew, p=p_coef, out=out)
     return out
 
 def _NRv1(R, g, Ds, nu, u_star, p, beta=3.0, out=None):
@@ -294,7 +294,7 @@ def _gp1991(R, g, Ds, nu, u_star, p, alpha = 0.6, beta=5.0, out=None):
 
     return out
 
-def _fukuda_etal_2023(u_star, U, g, R, h, Ds, nu, r0, out=None):
+def _fukuda_etal_2023(u_star, U, g, R, h, Ds, nu, r0, ew, p, out=None):
     """Calculate sediment entrainment rate based on fukuda et al. (2023).
     First, depth-averaged concentration is calculated. 
     Sediment entrainment rate (basal sediment concentration) is calculated using cb = r0*C.
@@ -305,11 +305,15 @@ def _fukuda_etal_2023(u_star, U, g, R, h, Ds, nu, r0, out=None):
 
     ws = get_ws(R, g, Ds, nu)
 
-    P_f = u_star**2*(np.abs(U))
-    N_f = g*R*h*ws
-    flow_power = P_f/N_f
+    # P_f = u_star**2*(np.abs(U))
+    # N_f = g*R*h*ws
+    # flow_power = P_f/N_f
+
+    P_th = u_star**2*(np.abs(U)) + (ew*np.abs(U)**3)/2
+    N_th = g*R*h*(ws + ew*np.abs(U)/2)
+    flow_power = P_th/N_th
     # phi = (5.6*10**(-3))*flow_power**(0.36)
-    phi = (1.1*10**(-2))*flow_power**(0.49)
+    phi = p*(1.1*10**(-2))*flow_power**(0.49)
 
     out[:, :] = r0*phi
 

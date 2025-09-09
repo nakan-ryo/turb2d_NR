@@ -111,21 +111,21 @@ def find_wet_grids(tc):
     #     (p[north_nodes_at_link] > p_w) & (p[south_nodes_at_link] > p_w))]
 
     #20250621 ADD#
-    # Ch_w_min = Ch_w #0.00001
-    # Ch_w_alpha= Ch_w_min/100
-    # Ch_w_smooth = 0.1
-    # Ch_w_local = np.maximum(Ch_w_min, Ch_w_alpha * tc.h)
-    # xi  = (Ch - Ch_w_local) / (Ch_w_smooth * Ch_w_local)
-    # phi_node = 0.5 * (1.0 + np.tanh(xi))          # 0–1 の連続マスク
-    # tc.phi_node = phi_node
-    # wet_nodes = (phi_node > 0.05) & (tc.h > tc.h_w)   # 計算セル
-    # tail = tc.grid.node_at_link_tail
-    # head = tc.grid.node_at_link_head
-    # tc.phi_link = 0.5 * (phi_node[tail] + phi_node[head])
+    Ch_w_min = Ch_w #0.00001
+    Ch_w_alpha= Ch_w_min/100
+    Ch_w_smooth = 0.1
+    Ch_w_local = np.maximum(Ch_w_min, Ch_w_alpha * tc.h)
+    xi  = (Ch - Ch_w_local) / (Ch_w_smooth * Ch_w_local)
+    phi_node = 0.5 * (1.0 + np.tanh(xi))          # 0–1 の連続マスク
+    tc.phi_node = phi_node
+    wet_nodes = (phi_node > 0.05) & (tc.h > tc.h_w)   # 計算セル
+    tail = tc.grid.node_at_link_tail
+    head = tc.grid.node_at_link_head
+    tc.phi_link = 0.5 * (phi_node[tail] + phi_node[head])
     #20250621 ADD#
 
-    wet_nodes = (Ch > Ch_w) & (tc.h > h_w)
-    tc.phi_link = None
+    # wet_nodes = (Ch > Ch_w) & (tc.h > h_w)
+    # tc.phi_link = None
 
     tc.wet_nodes = core[wet_nodes[core]]
     tc.wet_horizontal_links = horiz_links[

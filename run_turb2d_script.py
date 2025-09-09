@@ -1,10 +1,22 @@
 """This is a script to run the model of TurbidityCurrent2D
 """
 import os
+os.environ.setdefault("MPLBACKEND", "Agg")  # 完全ヘッドレス
+# キャッシュ/設定をWSL内の安全な場所へ
+os.environ.setdefault("MPLCONFIGDIR", f"/tmp/mpl-{os.environ.get('USER','u')}")
+os.makedirs(os.environ["MPLCONFIGDIR"], exist_ok=True)
+os.environ["OMP_NUM_THREADS"] = "4"
+os.environ["OPENBLAS_NUM_THREADS"] = "4"
+os.environ["NUMEXPR_NUM_THREADS"] = "4"
+os.environ["OPENBLAS_CORETYPE"] = "Haswell"  # or "Sandybridge", "Skylake"
+os.environ["OMP_STACKSIZE"] = "512M"
+# os.environ['MKL_NUM_THREADS'] = '24'
+
+import matplotlib
+matplotlib.use("Agg", force=True)
+
 import csv
 import shutil
-# os.environ['MKL_NUM_THREADS'] = '24'
-# os.environ['OMP_NUM_THREADS'] = '24'
 import numpy as np
 from turb2d.utils import create_topography, cordiate_to_node, create_folder
 from turb2d.utils import create_init_flow_region, create_topography_from_geotiff
@@ -26,7 +38,7 @@ if spacing==1000:
     grid = create_topography_from_geotiff(os.path.join(root_path,"bathymetry/GB04_WGS_1000.tif"),
                                        xlim=xlim, ylim=ylim, spacing=spacing, filter_size=[10, 10],
                                        distribution_filename="bathymetry/GB_sand01.tif",
-                                       setting_gs = [0.4, 0.4, 0.2] # if None is same ratio in all grain size
+                                    #    setting_gs = [0.4, 0.4, 0.2] # if None is same ratio in all grain size
                                        )
     ini_type = "bathymetry/GB_vfill_2.tif" #"rectangle" #"circle" #"inlet" #
 else:
@@ -43,7 +55,7 @@ else:
 #----------------------BASE SETTING-----------------------------------------------------------
 path = "/mnt/c/turb2d" #"/mnt/f/Turb2d/Test"
 obs_csv = 'obs_csv/obs_list.csv'
-dirname = 'GB380'#'YC086'#'GB222' #"test2024-04" #
+dirname = 'GB392'#'YC086'#'GB222' #"test2024-04" #
 last = 3*24*60*60 #8640 #100000
 itsnap = 20*60
 random_sw = False #True #
@@ -187,6 +199,7 @@ print("START", dirname)
 t = time.time()
 tc.save_nc('{}/{}_{:04d}.nc'.format(dirpath, dirname, 0))
 Ch_init = np.sum(tc.C * tc.h)
+print(Ch_init)
 dt=1.0
 num = 1
 for i in tqdm(range(1, last + 1), disable=False):
